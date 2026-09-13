@@ -55,10 +55,17 @@ ADMIN_ID = int(os.environ.get('ADMIN_ID', str(OWNER_ID)))
 YOUR_USERNAME = os.environ.get('YOUR_USERNAME', '@wtf_uchiha')
 UPDATE_CHANNEL = os.environ.get('UPDATE_CHANNEL', 'https://t.me/wtf_uchiha')
 
-# Folder setup - using absolute paths
-BASE_DIR = os.path.abspath(os.path.dirname(__file__)) # Get script's directory
+# Folder setup.
+# Vercel's deployed source directory (/var/task) is read-only. Any runtime
+# files must therefore live under /tmp. On a normal VPS/local server we keep
+# the original project-relative layout.
+if os.environ.get('VERCEL'):
+    BASE_DIR = os.path.join('/tmp', 'chx_hosting_bot')
+else:
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
 UPLOAD_BOTS_DIR = os.path.join(BASE_DIR, 'upload_bots')
-IROTECH_DIR = os.path.join(BASE_DIR, 'inf') # Assuming this name is intentional
+IROTECH_DIR = os.path.join(BASE_DIR, 'inf')
 DATABASE_PATH = os.path.join(IROTECH_DIR, 'bot_data.db')
 
 # File upload limits
