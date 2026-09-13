@@ -3,20 +3,9 @@ import subprocess
 import sys
 import os
 
-# ✅ Auto-install missing modules
-def auto_install(package):
-    try:
-        __import__(package)
-    except ModuleNotFoundError:
-        print(f"📦 Installing missing package: {package} ...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        print(f"✅ Installed: {package}")
+# Dependencies are installed from requirements.txt; do not pip-install at import time.
 
-# Auto-install required modules
-for mod in ["telebot", "psutil", "requests", "flask"]:
-    auto_install(mod)
 
-# --- After auto-install, import all modules safely ---
 import telebot
 import zipfile
 import tempfile
@@ -36,11 +25,15 @@ import requests
 from flask import Flask
 from threading import Thread
 
-app = Flask('')
+app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "I'am CHX HOSTING BOT"
+
+@app.route('/health')
+def health():
+    return {"status": "ok", "service": "CHX HOSTING BOT"}
 
 def run_flask():
   # Make sure to run on port provided by environment or default to 8080
@@ -55,11 +48,11 @@ def keep_alive():
 # --- End Flask Keep Alive ---
 
 # --- Configuration ---
-TOKEN = '8603963764:AAF_n0Y3D3QwJn-7EkoWZhRGLiYBCZURyow' # Replace with your actual token
-OWNER_ID = 6906353235 # Replace with your Owner ID
-ADMIN_ID = 6906353235# Replace with your Admin ID (can be same as Owner)
-YOUR_USERNAME = '@wtf_uchiha' # Replace with your Telegram username (without the @)
-UPDATE_CHANNEL = 'https://t.me/wtf_uchiha' # Replace with your update channel link
+TOKEN = os.environ.get('BOT_TOKEN', '')
+OWNER_ID = int(os.environ.get('OWNER_ID', '0'))
+ADMIN_ID = int(os.environ.get('ADMIN_ID', str(OWNER_ID)))
+YOUR_USERNAME = os.environ.get('YOUR_USERNAME', '@wtf_uchiha')
+UPDATE_CHANNEL = os.environ.get('UPDATE_CHANNEL', 'https://t.me/wtf_uchiha')
 
 # Folder setup - using absolute paths
 BASE_DIR = os.path.abspath(os.path.dirname(__file__)) # Get script's directory
@@ -79,7 +72,7 @@ os.makedirs(UPLOAD_BOTS_DIR, exist_ok=True)
 os.makedirs(IROTECH_DIR, exist_ok=True)
 
 # Initialize bot
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN) if TOKEN else None
 
 # --- Data structures ---
 bot_scripts = {} # Stores info about running scripts {script_key: info_dict}
@@ -2219,14 +2212,31 @@ if __name__ == '__main__':
     logger.info("="*40 + "\n🤖 Bot Starting Up...\n" + f"🐍 Python: {sys.version.split()[0]}\n" +
                 f"🔧 Base Dir: {BASE_DIR}\n📁 Upload Dir: {UPLOAD_BOTS_DIR}\n" +
                 f"📊 Data Dir: {IROTECH_DIR}\n🔑 Owner ID: {OWNER_ID}\n🛡️ Admins: {admin_ids}\n" + "="*40)
-    keep_alive()
-    logger.info("🚀 Starting polling...")
-    while True:
-        try:
-            bot.infinity_polling(logger_level=logging.INFO, timeout=60, long_polling_timeout=30)
-        except requests.exceptions.ReadTimeout: logger.warning("Polling ReadTimeout. Restarting in 5s..."); time.sleep(5)
-        except requests.exceptions.ConnectionError as ce: logger.error(f"Polling ConnectionError: {ce}. Retrying in 15s..."); time.sleep(15)
-        except Exception as e:
-            logger.critical(f"💥 Unrecoverable polling error: {e}", exc_info=True)
-            logger.info("Restarting polling in 30s due to critical error..."); time.sleep(30)
-        finally: logger.warning("Polling attempt finished. Will restart if in loop."); time.sleep(1)
+
+    # Vercel imports `app` as a serverless WSGI application. Do not start
+    # the long-running Telegram polling loop inside a Vercel runtime.
+    if os.environ.get('VERCEL'):
+        logger.info("☁️ Running on Vercel: Flask app exported; Telegram polling disabled.")
+    else:
+        if not TOKEN:
+            raise RuntimeError("BOT_TOKEN environment variable is required to run the Telegram bot.")
+        if OWNER_ID <= 0:
+            raise RuntimeError("OWNER_ID environment variable is required to run the Telegram bot.")
+        keep_alive()
+        logger.info("🚀 Starting polling...")
+        while True:
+            try:
+                bot.infinity_polling(logger_level=logging.INFO, timeout=60, long_polling_timeout=30)
+            except requests.exceptions.ReadTimeout:
+                logger.warning("Polling ReadTimeout. Restarting in 5s...")
+                time.sleep(5)
+            except requests.exceptions.ConnectionError as ce:
+                logger.error(f"Polling ConnectionError: {ce}. Retrying in 15s...")
+                time.sleep(15)
+            except Exception as e:
+                logger.critical(f"💥 Unrecoverable polling error: {e}", exc_info=True)
+                logger.info("Restarting polling in 30s due to critical error...")
+                time.sleep(30)
+            finally:
+                logger.warning("Polling attempt finished. Will restart if in loop.")
+                time.sleep(1)
