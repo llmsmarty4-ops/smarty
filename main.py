@@ -26,6 +26,9 @@ from flask import Flask
 from threading import Thread
 
 app = Flask(__name__)
+# Explicit WSGI aliases for Vercel/Python runtimes.
+application = app
+handler = app
 
 @app.route('/')
 def home():
