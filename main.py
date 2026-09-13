@@ -25,10 +25,8 @@ import requests
 from flask import Flask
 from threading import Thread
 
+# Vercel Flask entrypoint: this MUST remain a top-level Flask instance.
 app = Flask(__name__)
-# Explicit WSGI aliases for Vercel/Python runtimes.
-application = app
-handler = app
 
 @app.route('/')
 def home():
@@ -75,7 +73,10 @@ os.makedirs(UPLOAD_BOTS_DIR, exist_ok=True)
 os.makedirs(IROTECH_DIR, exist_ok=True)
 
 # Initialize bot
-bot = telebot.TeleBot(TOKEN) if TOKEN else None
+# Create the bot object even during Vercel's import/build phase.
+# The placeholder token is never used for polling; real polling is guarded below.
+BOT_TOKEN_PLACEHOLDER = "000000000:VERCEL_IMPORT_ONLY"
+bot = telebot.TeleBot(TOKEN or BOT_TOKEN_PLACEHOLDER)
 
 # --- Data structures ---
 bot_scripts = {} # Stores info about running scripts {script_key: info_dict}
